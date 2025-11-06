@@ -9,7 +9,7 @@ class IInputProcessor;
 
 
 UCLASS(ClassGroup = (Input), meta = (BlueprintSpawnableComponent))
-class BATBS_PRODUCTION_API UClickSimComponent : public UActorComponent
+class YOURPROJECTNAME_API UClickSimComponent : public UActorComponent
 {
 	GENERATED_BODY()
 
