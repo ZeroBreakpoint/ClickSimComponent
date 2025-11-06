@@ -57,14 +57,22 @@ void UClickSimComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// Bind as soon as the controller's InputComponent is ready.
 	TryBindInput();
-
-	// Register preprocessor so UMG never receives the A-press first.
 	RegisterPreprocessor();
 
-	// Keep cursor/UI behavior consistent at start and after PIE init.
+	// Keep cursor/UI behavior consistent at start.
 	EnsureViewportFocus();
+
+	// Optional: these were previously unconditional
+	if (bDisableUMGFocusNavOnBeginPlay)
+	{
+		DisableUMGFocusNavigation();
+	}
+	if (bForceWidgetsNonFocusableOnBeginPlay)
+	{
+		ForceWidgetsNonFocusable();
+	}
+
 	if (UWorld* W = GetWorld())
 	{
 		FTimerHandle Tmp;
@@ -81,17 +89,14 @@ void UClickSimComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void UClickSimComponent::TryBindInput()
 {
 	APlayerController* PC = Cast<APlayerController>(GetOwner());
-	if (!PC)
-		return;
+	if (!PC) return;
 
-	// InputComponent may be constructed a tad later (SetupInputComponent). Retry until valid.
 	if (!PC->InputComponent)
 	{
 		GetWorld()->GetTimerManager().SetTimer(BindRetryTimer, this, &UClickSimComponent::TryBindInput, 0.05f, false);
 		return;
 	}
 
-	// Make sure mouse/UMG clicks are enabled on this controller.
 	PC->bShowMouseCursor = true;
 	PC->bEnableClickEvents = true;
 	PC->bEnableMouseOverEvents = true;
@@ -101,13 +106,9 @@ void UClickSimComponent::TryBindInput()
 	Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
 	PC->SetInputMode(Mode);
 
-	// NOTE: Leave this binding or remove it—either is fine.
-	// The preprocessor fires first and consumes the key, so this won't double-trigger.
 	PC->InputComponent->BindKey(EKeys::Gamepad_FaceButton_Bottom, IE_Pressed,
 		this, &UClickSimComponent::SimulateLeftClick);
 
-	DisableUMGFocusNavigation();
-	ForceWidgetsNonFocusable();
 }
 
 void UClickSimComponent::RegisterPreprocessor()
@@ -139,18 +140,11 @@ void UClickSimComponent::SimulateLeftClick()
 {
 	FSlateApplication& Slate = FSlateApplication::Get();
 
-	// Break any capture from a previous *real* mouse click (prevents "old point X" routing)
+	// Break any stale capture just in case
 	Slate.ReleaseMouseCapture();
 
-	// Optional hardening against UMG focus nav grabbing A-press
-	DisableUMGFocusNavigation();
-	ForceWidgetsNonFocusable();
 
-	// Prevent "A" from triggering the previously-focused widget
-	Slate.ClearAllUserFocus();
-	Slate.ClearKeyboardFocus(EFocusCause::Cleared);
-
-	// Only click when a hovered widget exists
+	// Require a hovered widget of any type
 	if (bRequireHoveredWidget)
 	{
 		TArray<UUserWidget*> All;
@@ -158,34 +152,39 @@ void UClickSimComponent::SimulateLeftClick()
 		bool bHasHover = false;
 		for (UUserWidget* W : All)
 		{
-			if (W && W->IsVisible() && W->GetIsEnabled() && W->IsHovered()) { bHasHover = true; break; }
+			if (W && W->IsVisible() && W->GetIsEnabled() && W->IsHovered())
+			{
+				bHasHover = true; break;
+			}
 		}
 		if (!bHasHover) return;
 	}
 
-	// 2) Resolve a native window (needed in builds exposing the 2-arg Slate API)
+	// Resolve native window if available
 	TSharedPtr<SWindow> TopWin = Slate.GetActiveTopLevelWindow();
 	if ((!TopWin.IsValid() || !TopWin->GetNativeWindow().IsValid()) && GEngine && GEngine->GameViewport)
 	{
 		if (TSharedPtr<SWindow> ViewWin = GEngine->GameViewport->GetWindow())
+		{
 			TopWin = ViewWin;
+		}
 	}
 	const TSharedPtr<FGenericWindow> NativeWin = TopWin.IsValid() ? TopWin->GetNativeWindow()
 		: TSharedPtr<FGenericWindow>();
 
-	// 3) Build pointer events at the *real* cursor location (cursor-based click)
+	// Build pointer events at the real cursor position
 	const FVector2D ScreenPos = Slate.GetCursorPos();
 	const int32     PointerIdx = 0;
 	const FModifierKeysState Mods;
 
-	// 3a) Force a hover refresh: send a tiny move "nudge" so Last != Current, then a confirm move
+	// Hover refresh “nudge”
 	{
-		const FVector2D LastPos = ScreenPos + FVector2D(0.5f, 0.0f);   // small delta
+		const FVector2D LastPos = ScreenPos + FVector2D(0.5f, 0.0f);
 		const FPointerEvent NudgeMove(PointerIdx, ScreenPos, LastPos, TSet<FKey>(), EKeys::Invalid, 0, Mods);
 		Slate.ProcessMouseMoveEvent(NudgeMove);
 
 		const FPointerEvent MoveEvt(PointerIdx, ScreenPos, ScreenPos, TSet<FKey>(), EKeys::Invalid, 0, Mods);
-		Slate.ProcessMouseMoveEvent(MoveEvt); // always 1-arg
+		Slate.ProcessMouseMoveEvent(MoveEvt);
 	}
 
 	const FPointerEvent DownEvt(PointerIdx, ScreenPos, ScreenPos,
@@ -193,7 +192,7 @@ void UClickSimComponent::SimulateLeftClick()
 	const FPointerEvent UpEvt(PointerIdx, ScreenPos, ScreenPos,
 		TSet<FKey>(), EKeys::LeftMouseButton, 0, Mods);
 
-	// 4) Dispatch mouse down/up — pick 2-arg or 1-arg Slate overloads automatically
+	// Dispatch mouse down/up
 	auto CallMouseDown = [&](auto& App, const TSharedPtr<FGenericWindow>& Win, const FPointerEvent& E) -> void
 		{
 #if (__cplusplus >= 202002L) || (_MSVC_LANG >= 202002L)
@@ -220,9 +219,10 @@ void UClickSimComponent::SimulateLeftClick()
 	CallMouseDown(Slate, NativeWin, DownEvt);
 	CallMouseUp(Slate, NativeWin, UpEvt);
 
-	// 5) Keep future presses cursor-based (don’t let UMG keep focus)
-	UWidgetBlueprintLibrary::SetFocusToGameViewport();
-
+	if (bReturnFocusToViewportAfterClick)
+	{
+		PollMenusAndRefocus();
+	}
 }
 
 void UClickSimComponent::DisableUMGFocusNavigation() const

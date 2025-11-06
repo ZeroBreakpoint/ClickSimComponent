@@ -16,37 +16,48 @@ class YOURPROJECTNAME_API UClickSimComponent : public UActorComponent
 public:
 	UClickSimComponent();
 
-	// Optional manual trigger (also bound automatically to Gamepad A).
 	UFUNCTION(BlueprintCallable, Category = "ClickSim")
 	void SimulateLeftClick();
 
-	//If true, only click when at least one visible/hovered UMG widget exists.
+	// If true, only fire when some visible/hovered widget exists
 	UPROPERTY(EditAnywhere, Category = "ClickSim")
 	bool bRequireHoveredWidget = false;
+
+	// If true, we'll put focus back on the game viewport AFTER any open menu (e.g., combo popup) is closed.
+	UPROPERTY(EditAnywhere, Category = "ClickSim")
+	bool bReturnFocusToViewportAfterClick = true;
+
+	// If true, we’ll disable UMG focus navigation on BeginPlay (safe for game menus). Turn OFF if you rely on DPAD focus
+	UPROPERTY(EditAnywhere, Category = "ClickSim")
+	bool bDisableUMGFocusNavOnBeginPlay = true;
+
+	// If true, we keep widgets focusable. Turn OFF only if you know you don’t need widget focus at runtime.
+	UPROPERTY(EditAnywhere, Category = "ClickSim")
+	bool bForceWidgetsNonFocusableOnBeginPlay = false;
 
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
-	// Binds input when the PlayerController's InputComponent exists.
 	void TryBindInput();
 
-	// Clears widget focus and returns focus to the game viewport.
+	// Only used when we’re intentionally done with UI focus (outside of a click).
 	void EnsureViewportFocus() const;
 
-	// Disable focus navigation across all live UMG widgets (Stops DPAD/A-button focus routing)
+	// These are now optional and only run at BeginPlay if the flags are set.
 	void DisableUMGFocusNavigation() const;
-
-	// Make every widget in the current widget trees non-focusable (runtime safety net)
 	void ForceWidgetsNonFocusable() const;
 
-	// ---- NEW: Slate preprocessor registration helpers ----
+	// Slate preprocessor
 	void RegisterPreprocessor();
 	void UnregisterPreprocessor();
 
-	// Stored registration handle
-	TSharedPtr<IInputProcessor> Preprocessor;  // keep alive while component is active
+	// After a click, refocus viewport when no menus are visible.
+	void PollMenusAndRefocus();
+
+	TSharedPtr<IInputProcessor> Preprocessor;
 
 	FTimerHandle BindRetryTimer;
+	FTimerHandle PostClickRefocusTimer;
 };
