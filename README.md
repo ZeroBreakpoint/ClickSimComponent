@@ -1,6 +1,6 @@
 # ClickSimComponent (Unreal Engine, C++)
 
-Simulates a **left mouse click** at the current mouse cursor when pressing **Gamepad A**.  
+This small class creates a component to attach to Player Controllers within Unreal Engine.  Its purpose is to simulate a **left mouse click** at the current mouse cursor when pressing **Gamepad A**.  
 Prevents UMG from consuming the A-press by registering a **Slate input preprocessor**, then fires a real pointer click at the cursor.  Includes **widget-only** mode, by setting `bRequireHoveredWidget` to true.
 
 ## Install (drop-in source)
