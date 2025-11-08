@@ -57,27 +57,7 @@ void UClickSimComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	TryBindInput();
-	RegisterPreprocessor();
 
-	// Keep cursor/UI behavior consistent at start.
-	EnsureViewportFocus();
-
-	// Optional: these were previously unconditional
-	if (bDisableUMGFocusNavOnBeginPlay)
-	{
-		DisableUMGFocusNavigation();
-	}
-	if (bForceWidgetsNonFocusableOnBeginPlay)
-	{
-		ForceWidgetsNonFocusable();
-	}
-
-	if (UWorld* W = GetWorld())
-	{
-		FTimerHandle Tmp;
-		W->GetTimerManager().SetTimer(Tmp, this, &UClickSimComponent::EnsureViewportFocus, 0.15f, false);
-	}
 }
 
 void UClickSimComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -222,6 +202,54 @@ void UClickSimComponent::SimulateLeftClick()
 	if (bReturnFocusToViewportAfterClick)
 	{
 		PollMenusAndRefocus();
+	}
+}
+
+void UClickSimComponent::SetEnabled(bool bNewEnabled)
+{
+	TryBindInput();
+	RegisterPreprocessor();
+
+	// Keep cursor/UI behavior consistent at start.
+	EnsureViewportFocus();
+
+	// Optional: these were previously unconditional
+	if (bDisableUMGFocusNavOnBeginPlay)
+	{
+		DisableUMGFocusNavigation();
+	}
+	if (bForceWidgetsNonFocusableOnBeginPlay)
+	{
+		ForceWidgetsNonFocusable();
+	}
+
+	if (UWorld* W = GetWorld())
+	{
+		FTimerHandle Tmp;
+		W->GetTimerManager().SetTimer(Tmp, this, &UClickSimComponent::EnsureViewportFocus, 0.15f, false);
+	}
+
+
+	if (bNewEnabled)
+	{
+		RegisterPreprocessor();
+	}
+	else
+	{
+		UnregisterPreprocessor();
+	}
+}
+
+void UClickSimComponent::SetDisabled(bool bNewDisabled)
+{
+
+	if (bNewDisabled)
+	{
+		UnregisterPreprocessor();
+	}
+	else
+	{
+		RegisterPreprocessor();
 	}
 }
 

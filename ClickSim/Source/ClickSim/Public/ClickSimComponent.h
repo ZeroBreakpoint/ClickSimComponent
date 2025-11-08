@@ -35,6 +35,15 @@ public:
 	UPROPERTY(EditAnywhere, Category = "ClickSim")
 	bool bForceWidgetsNonFocusableOnBeginPlay = false;
 
+	UPROPERTY(EditAnywhere, Category = "ClickSim")
+	bool Enabled = true;
+
+	UFUNCTION(BlueprintCallable, Category = "ClickSim")
+	void SetEnabled(bool bNewEnabled);
+
+	UFUNCTION(BlueprintCallable, Category = "ClickSim")
+	void SetDisabled(bool bNewDisabled);
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
